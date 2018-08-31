@@ -118,7 +118,7 @@ def check_file(file1, out_dir, user_format, file2=False):
     Rename sequnce ids for SE or PE files to ensure
     consistency between kraken and kaiju (which modify
     id names). Create dictionaries containing real IDs and
-    renamed version and pickle. If data is PE, assert
+    renamed version. If data is PE, assert
     paired files have the same number of entries and if
     the paired reads are matched by choosing random
     entries and confirming the IDs match (optionally
@@ -127,8 +127,6 @@ def check_file(file1, out_dir, user_format, file2=False):
     if file2:
         ids1 = rename_seqIDs(file1, out_dir, user_format, paired=1)
         ids2 = rename_seqIDs(file2, out_dir, user_format, paired=2)
-        with open(os.path.join(out_dir, 'ids2.pkl'), 'wb') as pkl_dict:
-            pickle.dump(ids2, pkl_dict, protocol=pickle.HIGHEST_PROTOCOL)
 
         assert len(ids1) == len(ids2), \
             "Paired files have different number of reads"
@@ -145,9 +143,6 @@ def check_file(file1, out_dir, user_format, file2=False):
 
     with open(os.path.join(out_dir, "log_file.txt"), "a") as log_file:
         log_file.write("Number of sequences = " + str(list(ids1)[-1]) + "\n")
-
-    with open(os.path.join(out_dir, 'ids1.pkl'), 'wb') as pkl_dict:
-        pickle.dump(ids1, pkl_dict, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def fastqc_trim(out_dir, file1, trim_minlen, threads, adapter_file, file2=False):

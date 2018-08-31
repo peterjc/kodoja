@@ -171,8 +171,9 @@ def main():
     # Format kraken data and subset unclassified and non-host sequences
     log("Analyzing Kraken results\n")
     seq_reanalysis("kraken_table.txt", "kraken_labels.txt", args.output_dir,
-                   args.data_format, kraken_file1, kraken_file2)
-
+                   args.data_format, args.read1)
+    # TODO: Delay recovering read names until after kaiju has run,
+    # as then we only need to load the read number to name mapping once.
     t4 = time.time()
 
     # Kaiju classification of all sequences or subset sequences
@@ -187,7 +188,7 @@ def main():
     # Merge results
     log("Analyzing Kraken and Kaiju results\n")
     result_analysis(args.output_dir, "kraken_VRL.txt", "kaiju_table.txt", "kaiju_labels.txt",
-                    args.host_subset)
+                    args.host_subset, args.data_format, args.read1)
     t6 = time.time()
 
     # Create log file

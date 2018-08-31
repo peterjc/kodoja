@@ -67,6 +67,8 @@ def rename_seqIDs(input_file, out_dir, user_format, paired=False):
     Returns dictionary mapping the sequence number to the old
     identifier (first word only from the description line,
     and if paired without any "/1" or "/2" suffix).
+
+    See also read_names_by_number for recovering the dictionary.
     """
     if paired == 2:
         output_file = os.path.join(out_dir, "renamed_file_2." + user_format)
@@ -90,6 +92,23 @@ def rename_seqIDs(input_file, out_dir, user_format, paired=False):
                     name = name[:-2]
                 id_dict[index + 1] = name
                 out_file.write("@%i\n%s\n+\n%s\n" % (index + 1, seq, qual))
+    return id_dict
+
+
+def read_names_by_number(input_file, user_format):
+    """For mapping read numbers back to original read titles.
+
+    Essentially to undo the mapping from rename_seqIDs when we
+    come to analyse the Kraken or Kaiju ouput.
+    """
+    id_dict = {}
+    with open(input_file, 'r') as in_file:
+        if user_format == 'fasta':
+            for index, (title, seq) in enumerate(SimpleFastaParser(in_file)):
+                id_dict[index + 1] = title
+        else:
+            for index, (title, seq, qual) in enumerate(FastqGeneralIterator(in_file)):
+                id_dict[index + 1] = title
     return id_dict
 
 
@@ -254,18 +273,16 @@ def filter_sequence_file(input_file, output_file, user_format, wanted,
         print("Warning %i IDs not found in %s" % (len(wanted) - count, input_file))
 
 
-def seq_reanalysis(kraken_table, kraken_labels, out_dir, user_format, forSubset_file1,
-                   forSubset_file2=False):
+def seq_reanalysis(kraken_table, kraken_labels, out_dir, user_format, reads_file1):
     """Format table and subset sequences for kaiju analysis.
 
     Merge kraken_table and kraken_labels using format_result_table() and write to disk
     (delete kraken_table and kraken_label).
-    If subset = True, make a list of "Seq_ID" column value if sequence is unclassified
-    in "Classified" column or classified as VRL (virus) in column "Div_ID". This list will be
-    used to subset sequences using sequence_subset(). This should be used when the host plant
-    genome is used to classify sequences.
 
     Return merged kraken tableresult tables and subsetted sequence files (i subset=True).
+
+    It needs an original FASTA/FASTQ file in order to recover the read names
+    since we run Kraken (and Kaiju) with reads renamed to just their read number.
     """
     kraken_colNames = ["kraken_classified", "Seq_ID", "Tax_ID", "kraken_length",
                        "kraken_k-mer"]
@@ -278,8 +295,7 @@ def seq_reanalysis(kraken_table, kraken_labels, out_dir, user_format, forSubset_
     kraken_results.to_csv(os.path.join(out_dir, 'kraken_VRL.txt'),
                           sep='\t', index=False)
 
-    with open(os.path.join(out_dir, 'ids1.pkl'), 'rb') as id_dict:
-        ids1 = pickle.load(id_dict)
+    ids1 = read_names_by_number(reads_file1, user_format)
     kraken_fullTable["Seq_ID"] = kraken_fullTable["Seq_ID"].map(ids1)
     kraken_fullTable.to_csv(os.path.join(out_dir, "kraken_FormattedTable.txt"),
                             sep='\t', index=False)
@@ -332,12 +348,16 @@ def kaiju_classify(kaiju_file1, threads, out_dir, kaiju_db, kaiju_minlen, kraken
                     os.remove(kaiju_file2)
 
 
-def result_analysis(out_dir, kraken_VRL, kaiju_table, kaiju_label, host_subset):
+def result_analysis(out_dir, kraken_VRL, kaiju_table, kaiju_label, host_subset,
+                    user_format, reads_file1):
     """Kodoja results table.
 
     Imports kraken results table, formats kaiju_table and kaiju_labels and merges
     kraken and kaiju results into one table (kodoja). It then makes a table with
     all identified species and count number of intances for each usin virusSummary().
+
+    It needs an original FASTA/FASTQ file in order to recover the read names
+    since we run Kraken (and Kaiju) with reads renamed to just their read number.
     """
     kraken_results = pd.read_csv(os.path.join(out_dir + kraken_VRL),
                                  header=0, sep='\t',
@@ -352,8 +372,7 @@ def result_analysis(out_dir, kraken_VRL, kaiju_table, kaiju_label, host_subset):
     kaiju_fullTable['Seq_ID'] = kaiju_fullTable['Seq_ID'].astype(int)
     kaiju_results = kaiju_fullTable[["kaiju_classified", "Seq_ID", "Tax_ID", "Seq_tax"]]
 
-    with open(os.path.join(out_dir, 'ids1.pkl'), 'rb') as id_dict:
-        ids1 = pickle.load(id_dict)
+    ids1 = read_names_by_number(reads_file1, user_format)
     kaiju_fullTable["Seq_ID"] = kaiju_fullTable["Seq_ID"].map(ids1)
     kaiju_fullTable.to_csv(os.path.join(out_dir, 'kaiju_FormattedTable.txt'),
                            sep='\t', index=False)
